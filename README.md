@@ -1,36 +1,109 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Lumina Academy — squelette LMS complet
 
-## Getting Started
+Plateforme de formation en ligne **complète et livrable** : catalogue de
+cours public, chapitres/leçons avec aperçus gratuits, inscription gratuite
+ou achat via Stripe, lecteur de cours avec suivi de progression,
+back-office `/admin` (rôles `ADMIN` / `INSTRUCTOR` / `STUDENT`).
 
-First, run the development server:
+## Stack
+
+- Next.js (App Router) + Turbopack, TypeScript strict
+- Tailwind CSS v4 + shadcn/ui (preset base-ui), next-themes
+- Prisma 7 + PostgreSQL (driver adapter `@prisma/adapter-pg`)
+- Auth : **Better Auth** (email + mot de passe), rôles `ADMIN` /
+  `INSTRUCTOR` / `STUDENT`
+- Stripe Checkout + webhook (fallback dev sans clés)
+- TanStack Table, react-hook-form + zod, Server Actions
+- Vercel Blob (couvertures de cours), pnpm
+
+## Démarrage
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
+cp .env.example .env    # renseigner DATABASE_URL et BETTER_AUTH_SECRET
+pnpm install
+pnpm db:push            # crée les tables
+pnpm db:seed            # utilisateurs + 4 cours + inscriptions
 pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+- Site public : http://localhost:3000
+- Catalogue : http://localhost:3000/cours
+- Mes cours : http://localhost:3000/apprendre (compte requis)
+- Studio : http://localhost:3000/admin (ADMIN / INSTRUCTOR)
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Credentials (seed)
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Rôle        | Email                | Mot de passe  |
+|-------------|----------------------|---------------|
+| Admin       | `admin@example.com`  | `password123` |
+| Instructeur | `nadia@example.com`  | `password123` |
+| Instructeur | `karim@example.com`  | `password123` |
+| Élève       | `lea@example.com`    | `password123` |
+| Élève       | `hugo@example.com`   | `password123` |
 
-## Learn More
+Léa a acheté « Next.js de zéro à la production » (chapitre 1 terminé) et
+suit « SQL pratique ». Hugo suit le cours Figma.
 
-To learn more about Next.js, take a look at the following resources:
+## Parcours
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### Élève
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+1. `/cours` → catalogue filtrable par catégorie
+2. `/cours/[slug]` → programme détaillé, prix, aperçus gratuits
+3. Inscription gratuite en un clic, ou achat via `checkoutCourse`
+   (Stripe Checkout, ou **paiement simulé** si `STRIPE_SECRET_KEY` absent)
+4. `/apprendre` → ses cours avec barres de progression
+5. `/apprendre/[slug]` → lecteur : sidebar programme, leçon (vidéo +
+   contenu HTML), bouton « Marquer comme terminée », leçon suivante
 
-## Deploy on Vercel
+### Instructeur
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- `/admin/courses` : ne voit que **ses** cours (`canEditCourse` vérifie
+  `instructorId` côté serveur sur chaque action)
+- Édite le cours + tout le programme (chapitres, leçons, ordre, durée,
+  aperçu gratuit)
+- `/admin/users`, `/admin/orders`, `/admin/categories` → réservés à l'admin
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### Admin
+
+Dashboard (cours publiés, inscriptions, revenus, élèves), CRUD complet,
+commandes + **remboursement** (Stripe refund réel + retrait de
+l'inscription), gestion des rôles, journal d'activité.
+
+## Modèle de données
+
+```
+User (ADMIN/INSTRUCTOR/STUDENT)
+  ├── teaching → Course (instructorId)
+  ├── enrollments → Enrollment ──→ LessonProgress (leçon ✓)
+  └── orders → Order (PENDING/PAID/REFUNDED, stripeSessionId)
+
+Course (slug, prix, niveau, statut, coverUrl)
+  ├── category → Category
+  └── chapters → Chapter → Lesson (contenu HTML, videoUrl, freePreview)
+```
+
+## Paiement
+
+`POST /api/webhooks/stripe` traite `checkout.session.completed` →
+`markOrderPaid` crée l'`Enrollment` (idempotent, transaction). Sans clés
+Stripe, le checkout simule le paiement immédiatement — le tunnel complet
+(commande → inscription → progression) se teste en local.
+
+## Variables d'environnement
+
+| Variable                | Obligatoire | Usage                          |
+|-------------------------|-------------|--------------------------------|
+| `DATABASE_URL`          | Oui         | PostgreSQL                     |
+| `BETTER_AUTH_SECRET`    | Oui         | Secret de session              |
+| `BETTER_AUTH_URL`       | Non         | URL de l'app                   |
+| `STRIPE_SECRET_KEY`     | Non         | Paiement réel des cours        |
+| `STRIPE_WEBHOOK_SECRET` | Non         | Confirmation de paiement       |
+| `BLOB_READ_WRITE_TOKEN` | Non         | Upload couvertures             |
+| `NEXT_PUBLIC_SITE_URL`  | Non         | SEO, sitemap                   |
+
+## Thème
+
+Identité **violet** (`#7c3aed` / accent `#a78bfa` en dark) — éducation et
+connaissance, distincte des autres squelettes (cuivre, forêt, corail,
+teal, indigo, océan, framboise).
